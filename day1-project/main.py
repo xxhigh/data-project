@@ -144,6 +144,7 @@ class ApiCallError(RuntimeError):
 
 
 # Pydantic 검증 오류를 읽기 쉬운 메시지로 변환하는 함수
+# errors()의 loc/msg만 사용해 로그에 원본 payload 전체가 남지 않도록 제한합니다.
 def format_validation_errors(data_name: str, errors: list[dict[str, Any]]) -> str:
     messages = []
     for error in errors:
@@ -153,6 +154,7 @@ def format_validation_errors(data_name: str, errors: list[dict[str, Any]]) -> st
 
 
 # 로그를 콘솔과 파일에 동시에 저장하도록 설정하는 함수
+# force=True로 테스트/재실행 시 기존 handler 중복 등록을 방지합니다.
 def configure_logging() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -174,6 +176,7 @@ def load_config() -> AppConfig:
 
 
 # 단일 URL에 API 요청을 보내고 JSON 응답을 반환하는 함수
+# httpx 예외를 도메인 예외(ApiCallError)로 감싸 상위 파이프라인의 오류 처리를 단순화합니다.
 async def fetch_url(client: httpx.AsyncClient, url: str) -> dict[str, Any]:
     try:
         response = await client.get(url)
@@ -187,12 +190,14 @@ async def fetch_url(client: httpx.AsyncClient, url: str) -> dict[str, Any]:
 
 
 # 여러 URL에 대한 API 요청을 비동기로 병렬 실행하는 함수
+# gather는 하나라도 실패하면 예외를 전파합니다. 부분 성공을 허용하려면 return_exceptions=True가 필요합니다.
 async def fetch_all(urls: list[str]) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         return await asyncio.gather(*(fetch_url(client, url) for url in urls))
 
 
 # 날씨 API 응답을 Pydantic 모델로 검증하고 변환하는 함수
+# model_validate를 통해 타입 변환과 Field 범위 검증을 한 번에 수행합니다.
 def transform_weather_data(data: dict[str, Any]) -> WeatherData:
     try:
         return WeatherData.model_validate(data)
@@ -201,6 +206,7 @@ def transform_weather_data(data: dict[str, Any]) -> WeatherData:
 
 
 # 국가 API 응답을 Pydantic 모델로 검증하고 변환하는 함수
+# 외부 API 스키마 변경이 가장 먼저 드러나는 경계이므로 ValidationError를 명시적으로 래핑합니다.
 def transform_country_data(data: dict[str, Any]) -> CountryData:
     try:
         return CountryData.model_validate(data)
@@ -209,6 +215,7 @@ def transform_country_data(data: dict[str, Any]) -> CountryData:
 
 
 # IP 기반 위치 API 응답을 Pydantic 모델로 검증하고 변환하는 함수
+# 응답 필드의 "as" 키는 Python 예약어 충돌을 피하려고 as_ alias로 매핑됩니다.
 def transform_ip_based_location_data(data: dict[str, Any]) -> IPBasedLocationData:
     try:
         return IPBasedLocationData.model_validate(data)
@@ -217,6 +224,7 @@ def transform_ip_based_location_data(data: dict[str, Any]) -> IPBasedLocationDat
 
 
 # 검증된 날씨 데이터를 보기 좋은 요약 모델로 재가공하는 함수
+# hourly 데이터가 비어 있어도 전체 파이프라인이 실패하지 않도록 N/A 기본값을 사용합니다.
 def summarize_weather(data: WeatherData) -> WeatherSummary:
     temperatures = data.hourly.get("temperature_2m", [])
     precipitation = data.hourly.get("precipitation_probability", [])
@@ -249,6 +257,7 @@ def summarize_weather(data: WeatherData) -> WeatherSummary:
 
 
 # 검증된 국가 데이터를 보기 좋은 요약 모델로 재가공하는 함수
+# 사람이 읽기 쉬운 문자열 포맷과 계산 필드(density_per_km2)를 여기서만 생성합니다.
 def summarize_country(data: CountryData) -> CountrySummary:
     currency_names = [
         currency["name"]
@@ -275,6 +284,7 @@ def summarize_country(data: CountryData) -> CountrySummary:
 
 
 # 검증된 IP 위치 데이터를 보기 좋은 요약 모델로 재가공하는 함수
+# 도시/지역/국가와 네트워크 정보를 빈 값 없이 결합해 출력 품질을 유지합니다.
 def summarize_ip_location(data: IPBasedLocationData) -> LocationSummary:
     return LocationSummary(
         ip=data.query,
@@ -288,6 +298,7 @@ def summarize_ip_location(data: IPBasedLocationData) -> LocationSummary:
 
 
 # 저장 가능한 형태로 리스트 값을 문자열로 변환하는 함수
+# CSV/Parquet를 같은 단일 row 스키마로 저장하기 위해 list 필드를 평탄화합니다.
 def normalize_summary_value(value: Any) -> Any:
     if isinstance(value, list):
         return ", ".join(str(item) for item in value)
@@ -295,6 +306,7 @@ def normalize_summary_value(value: Any) -> Any:
 
 
 # Summary 모델을 파일 저장용 dict 행으로 변환하는 함수
+# Pydantic 모델의 내부 타입은 유지하되 파일 저장 직전에만 직렬화 형태로 바꿉니다.
 def summary_to_row(summary: Summary) -> dict[str, Any]:
     row = {
         key: normalize_summary_value(value)
@@ -304,11 +316,13 @@ def summary_to_row(summary: Summary) -> dict[str, Any]:
 
 
 # Summary 모델의 파일명에 사용할 이름을 구하는 함수
+# 클래스명 규칙(*Summary)에 의존하므로 새 Summary 모델을 추가할 때 명명 규칙을 맞춰야 합니다.
 def get_summary_name(summary: Summary) -> str:
     return summary.__class__.__name__.removesuffix("Summary").lower()
 
 
 # Summary 이름과 파일 형식으로 저장 경로를 생성하는 함수
+# OUTPUT_DIR은 테스트에서 monkeypatch할 수 있게 전역 Path로 분리되어 있습니다.
 def get_summary_path(summary_name: str, file_format: str) -> Path:
     return OUTPUT_DIR / f"{summary_name}_summary.{file_format}"
 
@@ -319,6 +333,7 @@ def summary_to_dataframe(summary: Summary) -> pd.DataFrame:
 
 
 # Summary 데이터를 CSV 파일로 저장하는 함수
+# CSV는 작은 단건 데이터에서 오버헤드가 낮고 사람이 직접 확인하기 쉽습니다.
 def write_summary_csv(summary: Summary) -> Path:
     path = get_summary_path(get_summary_name(summary), "csv")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -333,6 +348,7 @@ def read_summary_csv(summary_name: str) -> pd.DataFrame:
 
 
 # Summary 데이터를 Parquet 파일로 저장하는 함수
+# Parquet는 단건 데이터에서는 오버헤드가 있지만 대량 데이터와 스키마 보존에 유리합니다.
 def write_summary_parquet(summary: Summary) -> Path:
     path = get_summary_path(get_summary_name(summary), "parquet")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -356,6 +372,7 @@ def write_summary_files(summaries: list[Summary]) -> list[Path]:
 
 
 # cProfile로 단일 작업의 실행 시간을 측정하는 함수
+# 함수별 상세 통계 대신 전체 누적 시간(total_tt)만 벤치마크 표에 사용합니다.
 def profile_operation(operation: Callable[[], Any]) -> float:
     profiler = cProfile.Profile()
     profiler.runcall(operation)
@@ -363,12 +380,14 @@ def profile_operation(operation: Callable[[], Any]) -> float:
 
 
 # memory_profiler로 단일 작업의 피크 메모리를 측정하는 함수
+# 프로세스 RSS 기반 측정이라 아주 작은 작업에서는 포맷 간 차이가 작게 보일 수 있습니다.
 def measure_memory_peak(operation: Callable[[], Any]) -> float:
     usage = memory_usage((operation, (), {}), interval=0.01, max_usage=True)
     return float(usage)
 
 
 # 단일 파일 읽기/쓰기 작업의 시간과 메모리를 벤치마크하는 함수
+# timeit은 반복 평균, cProfile은 단일 실행, memory_profiler는 별도 샘플링 실행을 사용합니다.
 def benchmark_operation(
     summary_name: str,
     operation_name: str,
@@ -393,6 +412,7 @@ def benchmark_operation(
 
 
 # 단일 Summary에 대해 CSV와 Parquet 읽기/쓰기 성능을 측정하는 함수
+# read 벤치마크 전에 대상 파일이 반드시 존재하도록 선행 write를 한 번 수행합니다.
 def benchmark_summary_storage(summary: Summary) -> list[BenchmarkResult]:
     summary_name = get_summary_name(summary)
     csv_path = get_summary_path(summary_name, "csv")
@@ -434,6 +454,7 @@ def benchmark_summary_storage(summary: Summary) -> list[BenchmarkResult]:
 
 
 # 모든 Summary의 CSV와 Parquet 저장 형식별 성능을 측정하는 함수
+# 프로파일링 결과 간섭을 줄이기 위해 병렬화하지 않고 순차적으로 측정합니다.
 def benchmark_storage_formats(summaries: list[Summary]) -> pd.DataFrame:
     benchmark_results = []
     for summary in summaries:
@@ -443,6 +464,7 @@ def benchmark_storage_formats(summaries: list[Summary]) -> pd.DataFrame:
 
 
 # 저장 형식별 성능 비교 결과를 로그로 출력하는 함수
+# DataFrame 출력 순서를 고정해 실행 간 비교와 로그 diff를 쉽게 만듭니다.
 def log_storage_comparison(benchmark_df: pd.DataFrame) -> None:
     columns = [
         "summary_name",
@@ -464,6 +486,7 @@ def log_storage_comparison(benchmark_df: pd.DataFrame) -> None:
 
 
 # 전체 API 수집, 검증, 요약, 저장 벤치마크 파이프라인을 실행하는 함수
+# 네트워크 오류와 데이터 검증 오류는 로깅 후 종료하고, 저장/벤치마크는 검증 성공 데이터만 대상으로 합니다.
 async def main() -> None:
     configure_logging()
     config = load_config()
