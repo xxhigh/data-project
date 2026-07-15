@@ -1,5 +1,38 @@
+# ==========================================
+# 1. 가상환경 (Virtual Environments) - 절대 올리면 안 됨!
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+# poetry, pipenv 등 다른 도구를 쓸 때 생성되는 가상환경 디렉토리들
+.poetry/
+.pipenv/
+
+# ==========================================
+# 2. 파이썬 실행/빌드 임시 파일 (Python cache/compiled)
+# ==========================================
 __pycache__/
 *.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 output/
 Logs/
 .coverage
