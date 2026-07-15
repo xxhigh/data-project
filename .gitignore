@@ -1,0 +1,60 @@
+# ==========================================
+# 1. 가상환경 (Virtual Environments) - 절대 올리면 안 됨!
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+# poetry, pipenv 등 다른 도구를 쓸 때 생성되는 가상환경 디렉토리들
+.poetry/
+.pipenv/
+
+# ==========================================
+# 2. 파이썬 실행/빌드 임시 파일 (Python cache/compiled)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# 3. 환경변수 및 비밀 정보 (Secrets/Environments)
+# ==========================================
+.env
+.env.local
+.env.*
+secrets.json
+
+# ==========================================
+# 4. 에디터 및 OS 임시 파일 (Editor/OS specific)
+# ==========================================
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm (JetBrains)
+.idea/
+
+# Mac / Windows 임시 파일
+.DS_Store
+Thumbs.db
