@@ -1,0 +1,9 @@
+httpx
+memory-profiler
+pandas
+pyarrow
+pydantic
+python-dotenv
+pytest
+pytest-cov
+ruff

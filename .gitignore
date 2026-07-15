@@ -38,6 +38,7 @@ MANIFEST
 # 3. 환경변수 및 비밀 정보 (Secrets/Environments)
 # ==========================================
 .env
+!/day1-project/.env
 .env.local
 .env.*
 secrets.json
