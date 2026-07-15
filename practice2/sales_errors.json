@@ -1,0 +1,71 @@
+[
+  {
+    "row_index": 2,
+    "row": {
+      "region": "부산",
+      "category": "의류",
+      "amount": 0,
+      "month": "2024-01"
+    },
+    "errors": [
+      {
+        "type": "greater_than",
+        "loc": [
+          "amount"
+        ],
+        "msg": "Input should be greater than 0",
+        "input": 0,
+        "ctx": {
+          "gt": 0
+        },
+        "url": "https://errors.pydantic.dev/2.13/v/greater_than"
+      }
+    ]
+  },
+  {
+    "row_index": 5,
+    "row": {
+      "region": "",
+      "category": "전자",
+      "amount": 1350,
+      "month": "2024-01"
+    },
+    "errors": [
+      {
+        "type": "string_too_short",
+        "loc": [
+          "region"
+        ],
+        "msg": "String should have at least 1 character",
+        "input": "",
+        "ctx": {
+          "min_length": 1
+        },
+        "url": "https://errors.pydantic.dev/2.13/v/string_too_short"
+      }
+    ]
+  },
+  {
+    "row_index": 6,
+    "row": {
+      "region": "부산",
+      "category": "전자",
+      "amount": 0,
+      "month": "2024-02"
+    },
+    "errors": [
+      {
+        "type": "greater_than",
+        "loc": [
+          "amount"
+        ],
+        "msg": "Input should be greater than 0",
+        "input": 0,
+        "ctx": {
+          "gt": 0
+        },
+        "url": "https://errors.pydantic.dev/2.13/v/greater_than"
+      }
+    ]
+  }
+]

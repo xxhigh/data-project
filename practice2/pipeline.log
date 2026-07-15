@@ -1,0 +1,33 @@
+2026-07-15 14:45:21,985 [INFO] pipeline: Successfully loaded data from /Users/xxhigh/data-project/practice2/Python_Practice1_Data.json
+2026-07-15 14:45:21,985 [INFO] pipeline: safe load csv 통과 및 데이터 로딩 완료
+2026-07-15 14:45:21,985 [INFO] pipeline: 샘플 데이터 사용
+2026-07-15 14:45:21,986 [INFO] pipeline: Dumping 4 records to CSV
+2026-07-15 14:45:21,986 [INFO] pipeline: Dumping 3 records to JSON
+2026-07-15 14:45:21,986 [INFO] pipeline: valid saved: 4
+2026-07-15 14:45:21,986 [INFO] pipeline: errors saved: 3
+2026-07-15 14:45:21,986 [INFO] pipeline: reloaded valid count: 4
+2026-07-15 14:48:51,894 [INFO] pipeline: Successfully loaded data from /Users/xxhigh/data-project/practice2/Python_Practice2_Data.json
+2026-07-15 14:48:51,894 [INFO] pipeline: Successfully loaded data from /Users/xxhigh/data-project/practice2/Python_Practice2_Data.json
+2026-07-15 14:48:51,894 [INFO] pipeline: Dumping 4 records to CSV
+2026-07-15 14:48:51,895 [INFO] pipeline: Dumping 3 records to JSON
+2026-07-15 14:48:51,895 [INFO] pipeline: valid saved: 4
+2026-07-15 14:48:51,895 [INFO] pipeline: errors saved: 3
+2026-07-15 14:48:51,895 [INFO] pipeline: reloaded valid count: 4
+2026-07-15 14:49:21,044 [INFO] pipeline: Successfully loaded data from /Users/xxhigh/data-project/practice2/Python_Practice2_Data.json
+2026-07-15 14:49:21,044 [INFO] pipeline: Dumping 4 records to CSV
+2026-07-15 14:49:21,044 [INFO] pipeline: Dumping 3 records to JSON
+2026-07-15 14:49:21,044 [INFO] pipeline: valid saved: 4
+2026-07-15 14:49:21,044 [INFO] pipeline: errors saved: 3
+2026-07-15 14:49:21,044 [INFO] pipeline: reloaded valid count: 4
+2026-07-15 14:54:39,206 [INFO] pipeline: Successfully loaded data from /Users/xxhigh/data-project/practice2/Python_Practice2_Data.json
+2026-07-15 14:54:39,207 [ERROR] pipeline: ValidationError 발생 - row 2: {'region': '부산', 'category': '의류', 'amount': 0, 'month': '2024-01'}
+2026-07-15 14:54:39,207 [ERROR] pipeline:   - amount: Input should be greater than 0
+2026-07-15 14:54:39,207 [ERROR] pipeline: ValidationError 발생 - row 5: {'region': '', 'category': '전자', 'amount': 1350, 'month': '2024-01'}
+2026-07-15 14:54:39,207 [ERROR] pipeline:   - region: String should have at least 1 character
+2026-07-15 14:54:39,207 [ERROR] pipeline: ValidationError 발생 - row 6: {'region': '부산', 'category': '전자', 'amount': 0, 'month': '2024-02'}
+2026-07-15 14:54:39,207 [ERROR] pipeline:   - amount: Input should be greater than 0
+2026-07-15 14:54:39,207 [INFO] pipeline: Dumping 4 records to CSV
+2026-07-15 14:54:39,207 [INFO] pipeline: Dumping 3 records to JSON
+2026-07-15 14:54:39,208 [INFO] pipeline: valid saved: 4
+2026-07-15 14:54:39,208 [INFO] pipeline: errors saved: 3
+2026-07-15 14:54:39,208 [INFO] pipeline: reloaded valid count: 4
