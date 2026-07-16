@@ -3,7 +3,7 @@
 # 작성자: 김근홍
 # 작성일: 2026-07-16
 # 
-# 설명: Pandas, Polars, DuckDB를 활용한 데이터 처리 및 분석 예제 코드
+# 설명: 시각화 4종, 통계 검정, sklearn Pipeline 실습 코드
 #
 # 업데이트 내용(최신순으로 정렬)
 # ==============================
@@ -12,10 +12,257 @@ import pandas as pd
 import polars as pl
 import duckdb
 import timeit
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px
+from scipy import stats
 from pathlib import Path
+import joblib
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 DATA_FILE = "data/sales_100k.csv"
 REQUIRED_COLUMNS = {'amount', 'region', 'category'}
+
+#=== 데이터 시각화
+
+# EDA 시각화 4종을 2x2 서브플롯으로 출력합니다.
+# df: 데이터 프레임
+def show_plot(df):
+    validate_columns(df.columns)
+    if 'order_date' not in df.columns:
+        raise ValueError("월별 라인 차트를 만들기 위한 order_date 컬럼이 없습니다.")
+
+    fig, axes = plt.subplots(2,2, figsize=(12,12))
+    amount = pd.to_numeric(df['amount'], errors='coerce').dropna()
+    if amount.empty:
+        raise ValueError("amount 컬럼에 시각화할 수 있는 유효한 숫자 값이 없습니다.")
+
+    plot_df = df.copy()
+    plot_df['amount'] = pd.to_numeric(plot_df['amount'], errors='coerce')
+    plot_df['order_date'] = pd.to_datetime(plot_df['order_date'], errors='coerce')
+
+    # 1. amount 분포를 히스토그램과 KDE 곡선으로 확인합니다.
+    axes[0, 0].hist(amount, bins=50, density=True, alpha=0.6, color='skyblue', edgecolor='white')
+    if len(amount) > 1 and amount.std() > 0:
+        sample = amount.sample(min(len(amount), 5000), random_state=42).to_numpy()
+        x = np.linspace(amount.min(), amount.max(), 300)
+        bandwidth = 1.06 * sample.std(ddof=1) * (len(sample) ** (-1 / 5))
+        if bandwidth > 0:
+            kde = np.exp(-0.5 * ((x[:, None] - sample[None, :]) / bandwidth) ** 2).mean(axis=1)
+            kde = kde / (bandwidth * np.sqrt(2 * np.pi))
+            axes[0, 0].plot(x, kde, color='crimson', linewidth=2)
+    axes[0, 0].set_title('Amount Histogram + KDE')
+    axes[0, 0].set_xlabel('Amount')
+    axes[0, 0].set_ylabel('Density')
+
+    # 2. amount의 이상치와 분포 범위를 박스플롯으로 확인합니다.
+    axes[0, 1].boxplot(amount, vert=True, patch_artist=True, boxprops={'facecolor': 'lightgreen'})
+    axes[0, 1].set_title('Amount Boxplot')
+    axes[0, 1].set_ylabel('Amount')
+    axes[0, 1].set_xticks([1])
+    axes[0, 1].set_xticklabels(['amount'])
+
+    # 3. 월별 총매출 추이를 라인 차트로 확인합니다.
+    monthly_sales = (
+        plot_df.dropna(subset=['order_date', 'amount'])
+        .assign(month=lambda data: data['order_date'].dt.to_period('M').dt.to_timestamp())
+        .groupby('month')['amount']
+        .sum()
+        .sort_index()
+    )
+    axes[1, 0].plot(monthly_sales.index, monthly_sales.values, marker='o', color='steelblue')
+    axes[1, 0].set_title('Monthly Sales Trend')
+    axes[1, 0].set_xlabel('Month')
+    axes[1, 0].set_ylabel('Total Amount')
+    axes[1, 0].tick_params(axis='x', rotation=45)
+
+    # 4. 숫자형 컬럼 간 상관관계를 히트맵으로 확인합니다.
+    corr = plot_df.select_dtypes(include='number').corr()
+    im = axes[1, 1].imshow(corr, cmap='coolwarm', vmin=-1, vmax=1)
+    axes[1, 1].set_title('Correlation Heatmap')
+    axes[1, 1].set_xticks(range(len(corr.columns)))
+    axes[1, 1].set_yticks(range(len(corr.columns)))
+    axes[1, 1].set_xticklabels(corr.columns, rotation=45, ha='right')
+    axes[1, 1].set_yticklabels(corr.columns)
+    for i in range(len(corr.columns)):
+        for j in range(len(corr.columns)):
+            axes[1, 1].text(j, i, f'{corr.iloc[i, j]:.2f}', ha='center', va='center', fontsize=8)
+    fig.colorbar(im, ax=axes[1, 1], fraction=0.046, pad=0.04)
+
+    fig.tight_layout()
+    plt.show()
+
+# 서울 부산 평균 매출 차이를 t-test로, 지역과 카테고리 독립성을 카이제곱 검정을 수행합니다.
+# df: 데이터 프레임
+# alpha: 기본 0.05 (유의미 여부 p-value < alpha)
+def show_t_test_and_cross(df, alpha=0.05):
+    validate_columns(df.columns)
+
+    # 서울과 부산의 평균 매출 차이를 독립표본 t-test로 검정합니다.
+    test_df = df.copy()
+    test_df['amount'] = pd.to_numeric(test_df['amount'], errors='coerce')
+    seoul_amount = test_df.loc[test_df['region'] == '서울', 'amount'].dropna()
+    busan_amount = test_df.loc[test_df['region'] == '부산', 'amount'].dropna()
+
+    if seoul_amount.empty or busan_amount.empty:
+        raise ValueError("서울 또는 부산의 amount 유효값이 없어 t-test를 수행할 수 없습니다.")
+
+    t_stat, p_value = stats.ttest_ind(seoul_amount, busan_amount, equal_var=False)
+    print(f"\r\n서울 vs 부산 평균 매출 t-test: t통계량={t_stat:.3f}, p-value={p_value:.3f}")
+    if p_value < alpha:
+        print("해석: p-value가 0.05보다 작으므로 서울과 부산의 평균 매출 차이는 통계적으로 유의미합니다.")
+    else:
+        print("해석: p-value가 0.05 이상이므로 서울과 부산의 평균 매출 차이는 통계적으로 유의미하지 않습니다.")
+
+    # 지역과 카테고리의 독립성을 카이제곱 검정으로 확인합니다.
+    contingency_table = pd.crosstab(test_df['region'], test_df['category'])
+    if contingency_table.empty:
+        raise ValueError("지역과 카테고리 분할표가 비어 있어 카이제곱 검정을 수행할 수 없습니다.")
+
+    chi2_stat, chi2_p_value, dof, expected = stats.chi2_contingency(contingency_table)
+    print(f"\r\n지역 x 카테고리 카이제곱 검정: p-value={chi2_p_value:.3f}")
+    if chi2_p_value < alpha:
+        print("해석: p-value가 0.05보다 작으므로 지역과 카테고리는 서로 독립이 아니라고 볼 수 있습니다.")
+    else:
+        print("해석: p-value가 0.05 이상이므로 지역과 카테고리는 서로 독립이라고 볼 수 있습니다.")
+
+
+# sklearn ColumnTransformer와 Pipeline으로 전처리, 모델 학습, 평가, 저장, 재로딩을 수행합니다.
+# df: 데이터 프레임
+# model_path: 모델 저장 위치
+def process_sklearn(df, model_path="sales_amount_pipeline.joblib"):
+    validate_columns(df.columns)
+    validate_amount_values(df)
+
+    model_df = df.copy()
+    model_df['amount'] = pd.to_numeric(model_df['amount'], errors='coerce')
+    model_df = model_df.dropna(subset=['amount'])
+
+    if 'order_date' in model_df.columns:
+        order_date = pd.to_datetime(model_df['order_date'], errors='coerce')
+        model_df['order_year'] = order_date.dt.year
+        model_df['order_month'] = order_date.dt.month
+
+    numeric_features = [
+        column for column in ['quantity', 'unit_price', 'customer_age', 'order_year', 'order_month']
+        if column in model_df.columns
+    ]
+    categorical_features = [
+        column for column in ['region', 'category', 'payment_method', 'customer_gender']
+        if column in model_df.columns
+    ]
+
+    if not numeric_features and not categorical_features:
+        raise ValueError("sklearn 파이프라인에 사용할 feature 컬럼이 없습니다.")
+
+    X = model_df[numeric_features + categorical_features]
+    y = model_df['amount']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+    )
+
+    # 숫자 변환: 수량, 가격, 구매자 나이, 주문년도, 주문월
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler()),
+    ])
+
+    # 카테고리 변환: 지역, 분류, 구매방법, 구매자 성별
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore')),
+    ])
+
+    # 전처리
+    preprocessor = ColumnTransformer(transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features),
+    ])
+
+    # 파이프라인 생성
+    pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('model', LinearRegression()),
+    ])
+
+    pipeline.fit(X_train, y_train)
+    predictions = pipeline.predict(X_test)
+    score = pipeline.score(X_test, y_test)
+    mae = mean_absolute_error(y_test, predictions)
+
+    print(f"sklearn Pipeline R2 score: {score:.4f}")
+    print(f"sklearn Pipeline MAE: {mae:.2f}")
+
+    joblib.dump(pipeline, model_path)
+    print(f"모델 저장 완료: {model_path}")
+
+    loaded_pipeline = joblib.load(model_path)
+    loaded_predictions = loaded_pipeline.predict(X_test)
+    loaded_score = loaded_pipeline.score(X_test, y_test)
+    print(f"재로딩 모델 R2 score: {loaded_score:.4f}")
+    print(f"재로딩 모델 예측 샘플: {loaded_predictions[:5]}")
+
+    return loaded_pipeline
+
+# 지역, 카테고리별 총매출을 Plotly Express 막대 차트로 만들고 HTML 파일로 저장합니다.
+# df: 데이터 프레임
+# output_path: 출력 저장 위치
+def make_plotly(df, output_path="region_category_sales.html"):
+    validate_columns(df.columns)
+    validate_amount_values(df)
+
+    plot_df = df.copy()
+    plot_df['amount'] = pd.to_numeric(plot_df['amount'], errors='coerce')
+    grouped_df = (
+        plot_df.dropna(subset=['region', 'category', 'amount'])
+        .groupby(['region', 'category'], as_index=False)
+        .agg(total=('amount', 'sum'))
+        .sort_values('total', ascending=False)
+    )
+
+    if grouped_df.empty:
+        raise ValueError("Plotly 차트를 만들 수 있는 지역, 카테고리별 총매출 데이터가 없습니다.")
+
+    fig = px.bar(
+        grouped_df,
+        x='region',
+        y='total',
+        color='category',
+        barmode='group',
+        title='지역, 카테고리별 총매출',
+        labels={
+            'region': '지역',
+            'category': '카테고리',
+            'total': '총매출',
+        },
+        hover_data={
+            'region': True,
+            'category': True,
+            'total': ':,.0f',
+        },
+    )
+    fig.update_layout(
+        xaxis_title='지역',
+        yaxis_title='총매출',
+        legend_title_text='카테고리',
+        template='plotly_white',
+    )
+    fig.write_html(output_path)
+    print(f"Plotly HTML 저장 완료: {output_path}")
+    return fig
+    
+#=== 
+
 
 
 # CSV 파일이 실제로 존재하는지 확인합니다.
@@ -72,6 +319,7 @@ def load_data_pandas(file_path):
 
 # 기본 EDA를 수행합니다. (shape, info, describe)
 def check_data_pandas(df):
+    print(f"결측치 수:\r\n{df.isna().sum()}")
     print(f"DataFrame shape: {df.shape}")
     print("DataFrame info:")
     df.info()
@@ -229,20 +477,15 @@ def main():
     validate_amount_values(df)
     check_data_pandas(df)
     df = process_data_pandas(df)
+    
+    show_plot(df) # (EDA 시각화 4종)
+    
+    show_t_test_and_cross(df) # 통계 검정 (t-test, 카이제곱)
 
-    grouped_df = groupby_data_pandas(df)
-    print(grouped_df)
-
-    grouped_lf = lazy_load_data_polars(DATA_FILE)
-    print(grouped_lf)
-
-    grouped_duckdb = sql_duckdb(DATA_FILE)
-    print(grouped_duckdb)
-
-    benchmark_result = benchmark_tools(DATA_FILE, repeat_count=10)
-    print(benchmark_result)
-
-
+    process_sklearn(df) # sklearn Pipeline 구성, 학습, 평가, 저장, 재로딩
+    
+    plot_fig = make_plotly(df) # Plotly 인터랙티브 막대 차트 HTML 저장
+    plot_fig.show()
 
 if __name__ == "__main__":
     main()
