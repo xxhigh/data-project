@@ -43,6 +43,7 @@ class WeatherData(BaseModel):
     hourly_units: dict[str, str]
     hourly: dict[str, list[Any]]
 
+
 # 날씨 요약 데이터 모델
 class WeatherSummary(BaseModel):
     location: str
@@ -51,6 +52,7 @@ class WeatherSummary(BaseModel):
     forecast_hours: int = Field(ge=0)
     temperature_range: str
     max_precipitation_probability: str
+
 
 # 국가 API 응답 원본 데이터
 class CountryData(BaseModel):
@@ -72,6 +74,7 @@ class CountryData(BaseModel):
     languages: list[dict[str, Any]] = Field(default_factory=list)
     flag: str | None = None
 
+
 # 국가 요약 데이터 모델
 class CountrySummary(BaseModel):
     country: str
@@ -83,6 +86,7 @@ class CountrySummary(BaseModel):
     density_per_km2: float = Field(ge=0)
     currencies: list[str] = Field(default_factory=list)
     languages: list[str] = Field(default_factory=list)
+
 
 # IP 기반 위치 API 응답 원본 데이터
 class IPBasedLocationData(BaseModel):
@@ -101,6 +105,7 @@ class IPBasedLocationData(BaseModel):
     as_: str = Field(alias="as")
     query: str
 
+
 # IP 기반 위치 요약 데이터 모델
 class LocationSummary(BaseModel):
     ip: str
@@ -108,6 +113,7 @@ class LocationSummary(BaseModel):
     coordinates: str
     timezone: str
     network: str
+
 
 # 벤치마크 결과 데이터 모델
 class BenchmarkResult(BaseModel):
